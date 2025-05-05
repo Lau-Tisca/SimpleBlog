@@ -1,5 +1,4 @@
-# SimpleBlog
-# SimpleBlog API (TEMA 1)
+# SimpleBlog API
 
 ## Descriere
 
