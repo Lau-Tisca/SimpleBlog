@@ -1,14 +1,16 @@
 ﻿using SimpleBlog.Core.Dtos;
-using SimpleBlog.Core.Entities; // Necesar pentru mapare, chiar dacă nu returnăm direct
+using SimpleBlog.Core.Entities;
 using SimpleBlog.Core.Interfaces;
-using System.Linq; // Necesar pentru Select (mapare)
+using SimpleBlog.Core.Exceptions;// Pentru excepția NotFoundException
+using System.Collections.Generic; // Pentru List
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace SimpleBlog.Core.Services
 {
     public class UserService : IUserService
     {
-        private readonly IUserRepository _userRepository; // Injectăm interfața, nu implementarea
+        private readonly IUserRepository _userRepository;
 
         public UserService(IUserRepository userRepository)
         {
@@ -17,33 +19,75 @@ namespace SimpleBlog.Core.Services
 
         public async Task<UserWithPostsDto?> GetUserWithPostsAsync(int userId)
         {
-            // 1. Obține entitatea User cu postările incluse de la repository
             var userEntity = await _userRepository.GetUserWithPostsAsync(userId);
+            if (userEntity == null) return null;
 
-            // 2. Verifică dacă utilizatorul a fost găsit
-            if (userEntity == null)
-            {
-                return null; // Sau am putea arunca o excepție specifică, depinde de design
-            }
-
-            // 3. Mapează entitatea User la UserWithPostsDto
-            var userDto = new UserWithPostsDto
+            return new UserWithPostsDto
             {
                 Id = userEntity.Id,
                 Username = userEntity.Username,
                 Email = userEntity.Email,
-                // Mapează fiecare Post entitate la un PostDto folosind LINQ Select
                 Posts = userEntity.Posts.Select(postEntity => new PostDto
                 {
                     Id = postEntity.Id,
                     Title = postEntity.Title,
                     Content = postEntity.Content,
                     CreatedAt = postEntity.CreatedAt
-                }).ToList() // Convertim rezultatul Select într-o listă
+                }).ToList()
             };
+        }
 
-            // 4. Returnează DTO-ul
-            return userDto;
+        // --- IMPLEMENTAREA NOII METODE ---
+        public async Task<PagedResultDto<UserDto>> GetUsersAsync(
+            string? searchTerm,
+            string? sortBy,
+            bool isAscending,
+            int pageNumber,
+            int pageSize)
+        {
+            var (userEntities, totalCount) = await _userRepository.GetUsersAsync(
+                searchTerm, sortBy, isAscending, pageNumber, pageSize);
+
+            // Mapează entitățile User la UserDto
+            var userDtos = userEntities.Select(u => new UserDto
+            {
+                Id = u.Id,
+                Username = u.Username,
+                Email = u.Email
+            }).ToList();
+
+            return new PagedResultDto<UserDto>(userDtos, pageNumber, pageSize, totalCount);
+        }
+
+        public async Task<bool> UpdateUserAsync(int userId, UpdateUserDto updateUserDto)
+        {
+            // 1. Găsește utilizatorul în baza de date
+            var userEntity = await _userRepository.GetUserByIdAsync(userId);
+
+            // 2. Verifică dacă utilizatorul există
+            if (userEntity == null)
+            {
+                throw new NotFoundException(nameof(User), userId);
+            }
+
+            // 3. Aplică modificările (doar pentru câmpurile care nu sunt null în DTO)
+            bool hasChanges = false;
+            if (updateUserDto.Username != null)
+            {
+                userEntity.Username = updateUserDto.Username;
+                hasChanges = true;
+            }
+            if (updateUserDto.Email != null)
+            {
+                userEntity.Email = updateUserDto.Email;
+                hasChanges = true;
+            }
+
+            if (hasChanges)
+            {
+                return await _userRepository.SaveChangesAsync();
+            }
+            return true;
         }
     }
 }

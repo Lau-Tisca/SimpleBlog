@@ -3,6 +3,7 @@ using SimpleBlog.Database;          // Pentru a accesa BlogDbContext
 using SimpleBlog.Core.Interfaces;     // Pentru IUserRepository
 using SimpleBlog.Database.Repositories; // Pentru UserRepository
 using SimpleBlog.Core.Services;   // Pentru UserService
+using SimpleBlog.Api.Middleware; // Pentru ErrorHandlingMiddleware
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,8 +22,9 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 builder.Services.AddScoped<IUserService, UserService>();
 
-var app = builder.Build();
+var app = builder.Build(); // Aplicația este construită aici
 
+// --- Seed the database ---
 try
 {
     // Folosim metoda de extensie creată
@@ -33,6 +35,13 @@ catch (Exception ex)
     // Loghează eroarea (într-o aplicație reală ai folosi un logger configurat)
     Console.WriteLine($"An error occurred seeding the DB: {ex.Message}");
 }
+// --- End Seeding ---
+
+// Trebuie să fie printre primele în pipeline pentru a prinde erorile
+// din middleware-urile și endpoint-urile ulterioare.
+app.UseMiddleware<ErrorHandlingMiddleware>();
+// --- Sfârșit adăugare Middleware ---
+
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -43,7 +52,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseAuthorization();
+//app.UseAuthorization();
 
 app.MapControllers();
 

@@ -1,51 +1,72 @@
-﻿using Microsoft.AspNetCore.Mvc;     // Necesar pentru [ApiController], [Route], ControllerBase, ActionResult, etc.
-using SimpleBlog.Core.Dtos;       // Necesar pentru UserWithPostsDto
-using SimpleBlog.Core.Interfaces; // Necesar pentru IUserService
-using System.Threading.Tasks;       // Necesar pentru Task
+﻿using Microsoft.AspNetCore.Mvc;
+using SimpleBlog.Core.Dtos;
+using SimpleBlog.Core.Interfaces;
+using System.Threading.Tasks;
+using System.Collections.Generic; // Pentru IEnumerable în ActionResult
 
 namespace SimpleBlog.Api.Controllers
 {
-    [ApiController] // Indică faptul că aceasta este o clasă API Controller (activează comportamente specifice API)
-    [Route("api/[controller]")] // Definește ruta de bază pentru acest controller: /api/users
-                                // [controller] este un placeholder care ia numele clasei fără "Controller" (deci "Users")
-    public class UsersController : ControllerBase // Clasa de bază comună pentru controllere API (fără suport View)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class UsersController : ControllerBase
     {
-        private readonly IUserService _userService; // Injectăm serviciul
+        private readonly IUserService _userService;
 
-        // Constructor pentru Dependency Injection
         public UsersController(IUserService userService)
         {
             _userService = userService;
         }
 
         // GET /api/users/{id}
-        [HttpGet("{id}")] // Definește că această metodă răspunde la cereri HTTP GET pe ruta specificată
-                          // "{id}" este un parametru de rută, valoarea sa va fi legată de parametrul 'id' al metodei
-        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UserWithPostsDto))] // Documentație Swagger: ce returnează la succes (200)
-        [ProducesResponseType(StatusCodes.Status404NotFound)] // Documentație Swagger: ce returnează dacă nu găsește (404)
+        [HttpGet("{id}")]
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(UserWithPostsDto))]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
         public async Task<ActionResult<UserWithPostsDto>> GetUserWithPosts(int id)
         {
-            // Apelăm serviciul pentru a obține datele (DTO-ul)
             var userDto = await _userService.GetUserWithPostsAsync(id);
-
-            // Verificăm dacă serviciul a returnat un utilizator
             if (userDto == null)
             {
-                // Dacă nu, returnăm un răspuns HTTP 404 Not Found
-                return NotFound(); // Metodă helper din ControllerBase
+                return NotFound();
             }
-
-            // Dacă utilizatorul a fost găsit, returnăm un răspuns HTTP 200 OK
-            // cu obiectul DTO serializat automat ca JSON în corpul răspunsului.
-            return Ok(userDto); // Metodă helper din ControllerBase
+            return Ok(userDto);
         }
 
-        // Aici am putea adăuga alte metode (endpoint-uri) pentru Users,
-        // de exemplu:
-        // [HttpGet] // GET /api/users - pentru a lua toți utilizatorii
-        // public async Task<ActionResult<IEnumerable<UserDto>>> GetAllUsers() { ... }
+        // --- GET /api/users ---
+        [HttpGet] // Răspunde la GET /api/users
+        [ProducesResponseType(StatusCodes.Status200OK, Type = typeof(PagedResultDto<UserDto>))]
+        public async Task<ActionResult<PagedResultDto<UserDto>>> GetUsers(
+            [FromQuery] string? searchTerm = null,    // Parametru din query string
+            [FromQuery] string? sortBy = null,      // ex: ?sortBy=Username
+            [FromQuery] bool isAscending = true,   // ex: &isAscending=false
+            [FromQuery] int pageNumber = 1,         // ex: &pageNumber=2
+            [FromQuery] int pageSize = 10)          // ex: &pageSize=20
+        {
+            var pagedResult = await _userService.GetUsersAsync(searchTerm, sortBy, isAscending, pageNumber, pageSize);
+            return Ok(pagedResult);
+        }
 
-        // [HttpPost] // POST /api/users - pentru a crea un user nou
-        // public async Task<ActionResult<UserDto>> CreateUser(CreateUserDto newUser) { ... }
+        // --- PATCH /api/users/{id} ---
+        [HttpPatch("{id}")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)] // Documentația Swagger rămâne
+        public async Task<IActionResult> UpdateUser(int id, [FromBody] UpdateUserDto updateUserDto)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            // Nu mai verificăm rezultatul boolean pentru "not found" aici.
+            // Dacă user-ul nu e găsit, _userService.UpdateUserAsync va arunca NotFoundException,
+            // care va fi prinsă de ErrorHandlingMiddleware.
+            await _userService.UpdateUserAsync(id, updateUserDto);
+
+            // Dacă ajungem aici, înseamnă că ori user-ul a fost găsit și actualizat (sau nu au fost modificări),
+            // ori o altă excepție (care nu e NotFoundException și nu e prinsă specific în middleware
+            // pentru un răspuns diferit) a fost aruncată și va rezulta într-un 500.
+            // Presupunând că totul e ok, returnăm 204.
+            return NoContent();
+        }
     }
 }
