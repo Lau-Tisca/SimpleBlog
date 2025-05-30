@@ -1,17 +1,23 @@
-﻿using SimpleBlog.Core.Entities; // Pentru User și Post
-using System.Collections.Generic; // Pentru IEnumerable
-using System.Threading.Tasks; // Pentru Task (operații asincrone)
+﻿using SimpleBlog.Core.Entities;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace SimpleBlog.Core.Interfaces
 {
     public interface IUserRepository
     {
-        // Metodă pentru a obține UN utilizator specific după ID,
-        // incluzând (eager loading) postările sale asociate.
-        Task<User?> GetUserWithPostsAsync(int userId);
+        Task<User?> GetUserWithPostsAsync(int userId); // Metoda existentă
+        // Task<IEnumerable<User>> GetAllUsersAsync(); // Comentăm sau ștergem asta dacă vrem să o înlocuim
 
-        // O metodă adițională (opțională pentru temă, dar utilă în general)
-        // pentru a obține toți utilizatorii (fără postări, pentru eficiență).
-        Task<IEnumerable<User>> GetAllUsersAsync();
+        Task<(IEnumerable<User> Users, int TotalCount)> GetUsersAsync(
+            string? searchTerm, // Pentru filtrare după username/email
+            string? sortBy,     // După ce câmp sortăm
+            bool isAscending,   // Direcția sortării
+            int pageNumber,     // Numărul paginii
+            int pageSize        // Dimensiunea paginii
+        );
+
+        Task<User?> GetUserByIdAsync(int userId); // O metodă simplă pentru a obține un user după ID (fără postări)
+        Task<bool> SaveChangesAsync(); // Metodă pentru a persista modificările
     }
 }
